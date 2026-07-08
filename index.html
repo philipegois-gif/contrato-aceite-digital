@@ -229,6 +229,7 @@
     gap:8px;
     text-align:center;
     white-space:nowrap;
+    text-decoration:none;
   }
   .btn-primary{
     background:var(--green);
@@ -498,9 +499,16 @@
         <span class="tag">Art. 107 CC</span>
         <span class="tag">LGPD 13.709</span>
       </div>
-      <div style="margin-top:18px; display:flex; gap:10px">
-        <button class="btn btn-secondary" id="copiarRecibo" style="flex:1">Copiar recibo</button>
-        <button class="btn btn-primary" id="fecharEAvancar" style="flex:1">Novo Contrato (Zerar)</button>
+      
+      <div style="margin-top:18px; display:flex; flex-direction:column; gap:10px">
+        <a href="https://wa.me/5573982103824?text=Ol%C3%A1!%20J%C3%A1%20realizei%20o%20Aceite%20Digital%20e%20assinei%20o%20contrato." target="_blank" class="btn" style="background:#25D366; color:#fff; box-shadow:0 8px 20px rgba(37,211,102,.25);">
+          💬 Voltar para a Conversa no WhatsApp
+        </a>
+        
+        <div style="display:flex; gap:10px; width:100%">
+          <button class="btn btn-secondary" id="copiarRecibo" style="flex:1; font-size:14px; padding:12px 10px;">Copiar recibo</button>
+          <button class="btn btn-secondary" id="fecharEAvancar" style="flex:1; font-size:14px; padding:12px 10px;">Novo Contrato</button>
+        </div>
       </div>
     </div>
   </div>
@@ -577,30 +585,27 @@
     localStorage.removeItem('master_aceite');
   }
 
-  // EVENTO DE ACEITE ATUALIZADO (Busca IP real e dispara para o n8n)
+  // EVENTO DE ACEITE
   btnAceitar.addEventListener('click', async () => {
     if(!validar()) return;
 
-    // Desativa o botão temporariamente para evitar cliques duplos durante o processamento
     btnAceitar.disabled = true;
     btnAceitar.textContent = 'Registrando...';
 
     let ip = 'Não identificado';
     
-    // 1. CAPTURA O IP REAL DO CLIENTE (Busca externa)
     try {
       const ipRes = await fetch('https://api.ipify.org?format=json');
       const ipData = await ipRes.json();
       ip = ipData.ip;
     } catch (err) {
       console.error('Erro ao buscar IP real, usando simulado:', err);
-      ip = gerarIP(); // Plano B (Simulador interno) caso a API caia
+      ip = gerarIP();
     }
 
     const hash = gerarHash();
     const dataHora = dataBrasilia();
 
-    // Organiza os dados exatos do Payload para preencher a planilha
     const dadosPayload = {
       dataHora: dataHora,
       nome: nome.value.trim(),
@@ -611,9 +616,8 @@
       hash: hash
     };
 
-    // 2. DISPARA OS DADOS EM SEGUNDO PLANO PARA O SEU WEBHOOK DO N8N
     try {
-      await fetch('https://masterltda-master-n8n.hf.space/webhook/aceite-contrato', {
+      await fetch('SUA_URL_DO_WEBHOOK_AQUI', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dadosPayload)
@@ -622,7 +626,6 @@
       console.error('Erro ao enviar dados para o n8n:', error);
     }
 
-    // 3. GERA O COMPROVANTE OFICIAL NA TELA (Sem o termo "simulado")
     const reciboHTML = `
 <strong>CONTRATADA:</strong> Master Tecnologia e Dados (Philipe Gois Santana - CPF 067.110.445-41)<br>
 <strong>CONTRATANTE:</strong> ${nome.value.trim()}<br>

@@ -500,19 +500,13 @@
       </div>
       <div style="margin-top:18px; display:flex; gap:10px">
         <button class="btn btn-secondary" id="copiarRecibo" style="flex:1">Copiar recibo</button>
-        <!-- Alterado o texto do botão para guiar o cliente de volta -->
-        <button class="btn btn-primary" id="fecharEAvancar" style="flex:1">Voltar para o WhatsApp e Pagar</button>
+        <button class="btn btn-primary" id="fecharEAvancar" style="flex:1">Novo Contrato (Zerar)</button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-  // --- CONFIGURAÇÕES DE INTEGRAÇÃO DA MASTER TECNOLOGIA ---
-  const NUMERO_WHATSAPP = "5573982103824"; 
-  const URL_WEBHOOK_N8N = "https://masterltda-master-n8n.hf.space/webhook-test/aceite-contrato"; // Substitua pela URL gerada no seu nó do Webhook no n8n
-  // --------------------------------------------------------
-
   const $ = (s)=>document.querySelector(s);
   const nome = $('#nome');
   const doc = $('#doc');
@@ -583,22 +577,52 @@
     localStorage.removeItem('master_aceite');
   }
 
-  // Função para redirecionar o cliente para o WhatsApp com a mensagem gatilho
-  function irParaWhatsApp() {
-    const textoMensagem = encodeURIComponent("Já li e aceito o contrato. Pode enviar o link de pagamento!");
-    window.location.href = `https://wa.me/${NUMERO_WHATSAPP}?text=${textoMensagem}`;
-  }
-
-  btnAceitar.addEventListener('click', async ()=>{
+  // EVENTO DE ACEITE ATUALIZADO (Busca IP real e dispara para o n8n)
+  btnAceitar.addEventListener('click', async () => {
     if(!validar()) return;
 
+    // Desativa o botão temporariamente para evitar cliques duplos durante o processamento
     btnAceitar.disabled = true;
-    btnAceitar.textContent = '⏱️ Salvando Aceite...';
+    btnAceitar.textContent = 'Registrando...';
 
-    const ip = gerarIP();
+    let ip = 'Não identificado';
+    
+    // 1. CAPTURA O IP REAL DO CLIENTE (Busca externa)
+    try {
+      const ipRes = await fetch('https://api.ipify.org?format=json');
+      const ipData = await ipRes.json();
+      ip = ipData.ip;
+    } catch (err) {
+      console.error('Erro ao buscar IP real, usando simulado:', err);
+      ip = gerarIP(); // Plano B (Simulador interno) caso a API caia
+    }
+
     const hash = gerarHash();
     const dataHora = dataBrasilia();
 
+    // Organiza os dados exatos do Payload para preencher a planilha
+    const dadosPayload = {
+      dataHora: dataHora,
+      nome: nome.value.trim(),
+      documento: doc.value.trim(),
+      email: email.value.trim(),
+      telefone: telefone.value.trim(),
+      ip: ip,
+      hash: hash
+    };
+
+    // 2. DISPARA OS DADOS EM SEGUNDO PLANO PARA O SEU WEBHOOK DO N8N
+    try {
+      await fetch('https://masterltda-master-n8n.hf.space/webhook/aceite-contrato', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosPayload)
+      });
+    } catch (error) {
+      console.error('Erro ao enviar dados para o n8n:', error);
+    }
+
+    // 3. GERA O COMPROVANTE OFICIAL NA TELA (Sem o termo "simulado")
     const reciboHTML = `
 <strong>CONTRATADA:</strong> Master Tecnologia e Dados (Philipe Gois Santana - CPF 067.110.445-41)<br>
 <strong>CONTRATANTE:</strong> ${nome.value.trim()}<br>
@@ -607,33 +631,11 @@
 <strong>TELEFONE:</strong> ${telefone.value.trim()}<br><br>
 
 <strong>DATA/HORA (Brasília):</strong> ${dataHora}<br>
-<strong>IP DE ACEITE (simulado):</strong> ${ip}<br>
+<strong>IP DE ACEITE:</strong> ${ip}<br>
 <strong>HASH DE ACEITE:</strong> ${hash}<br><br>
 
 <strong>DECLARAÇÃO:</strong> Aceite eletrônico registrado nos termos do art. 107 do Código Civil e Lei 14.063/2020.
     `.trim();
-
-    // DISPARO DO WEBHOOK PARA O N8N (Salva os dados imediatamente)
-    const dadosPayload = {
-      nome: nome.value.trim(),
-      documento: doc.value.trim(),
-      email: email.value.trim(),
-      telefone: telefone.value.trim(),
-      dataHora: dataHora,
-      ip: ip,
-      hash: hash
-    };
-
-    try {
-      await fetch(URL_WEBHOOK_N8N, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dadosPayload)
-      });
-    } catch (err) {
-      console.error("Erro ao enviar dados para o n8n:", err);
-      // O fluxo continua mesmo se falhar a rede para não travar a experiência do usuário
-    }
 
     reciboContent.innerHTML = reciboHTML;
     overlay.classList.add('show');
@@ -653,10 +655,7 @@
   }
 
   fecharModal.addEventListener('click', fecharModalRecibo);
-  
-  // Ao clicar para fechar e avançar, ele agora vai direto para o WhatsApp
-  fecharEAvancar.addEventListener('click', irParaWhatsApp);
-
+  fecharEAvancar.addEventListener('click', fecharModalRecibo);
   overlay.addEventListener('click', (e)=>{
     if(e.target===overlay) fecharModalRecibo();
   });
